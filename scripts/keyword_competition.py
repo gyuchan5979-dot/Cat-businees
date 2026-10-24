@@ -2,7 +2,9 @@
 
 필요한 환경변수:
   NAVER_AD_API_KEY, NAVER_AD_SECRET_KEY, NAVER_AD_CUSTOMER_ID  (네이버 검색광고 API)
-  NAVER_CLIENT_ID, NAVER_CLIENT_SECRET                        (네이버 개발자센터 검색 API)
+  NAVER_CLIENT_ID, NAVER_CLIENT_SECRET                        (네이버 개발자센터 검색 API,
+      openapi.naver.com Network secret으로 헤더를 넣었다면 생략 가능)
+검색광고 API는 요청마다 비밀키로 서명해야 해서 Network secret 헤더 주입으로는 안 되고 환경변수가 필요하다.
 
 실행: python3 scripts/keyword_competition.py  → data/keyword_competition.csv
 """
@@ -81,10 +83,11 @@ def fetch_search_volumes(keywords):
 
 def fetch_product_count(keyword):
     query = urllib.parse.urlencode({"query": keyword, "display": 1})
-    data = get_json(
-        f"https://openapi.naver.com/v1/search/shop.json?{query}",
-        {"X-Naver-Client-Id": env("NAVER_CLIENT_ID"), "X-Naver-Client-Secret": env("NAVER_CLIENT_SECRET")},
-    )
+    # 환경 Network secret으로 헤더를 주입하는 경우 환경변수 없이도 동작한다
+    headers = {}
+    if os.environ.get("NAVER_CLIENT_ID"):
+        headers = {"X-Naver-Client-Id": env("NAVER_CLIENT_ID"), "X-Naver-Client-Secret": env("NAVER_CLIENT_SECRET")}
+    data = get_json(f"https://openapi.naver.com/v1/search/shop.json?{query}", headers)
     return int(data.get("total", 0))
 
 
