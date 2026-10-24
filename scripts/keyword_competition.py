@@ -16,6 +16,7 @@ import json
 import os
 import sys
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -76,7 +77,8 @@ def fetch_search_volumes(keywords):
         for row in data.get("keywordList", []):
             rel = row["relKeyword"].replace(" ", "")
             if rel in batch:
-                volumes[rel] = (parse_count(row["monthlyPcQcCnt"]), parse_count(row["monthlyMobileQcCnt"]))
+                volumes[rel] = (parse_count(row["monthlyPcQcCnt"]), parse_count(row["monthlyMobileQcCnt"]),
+                                row.get("compIdx", "-"))
         time.sleep(0.3)
     return volumes
 
@@ -91,29 +93,42 @@ def fetch_product_count(keyword):
     return int(data.get("total", 0))
 
 
+def product_count_or_none(keyword):
+    """쇼핑 검색 API 키가 없거나 막혀 있으면 None (검색량·광고 경쟁정도만으로 진행)."""
+    try:
+        return fetch_product_count(keyword)
+    except (urllib.error.HTTPError, SystemExit):
+        return None
+
+
 def main():
     volumes = fetch_search_volumes(KEYWORDS)
     rows = []
     for kw in KEYWORDS:
-        pc, mobile = volumes.get(kw.replace(" ", ""), (0, 0))
+        pc, mobile, comp = volumes.get(kw.replace(" ", ""), (0, 0, "-"))
         total = pc + mobile
-        products = fetch_product_count(kw)
-        ratio = round(products / total, 2) if total else None
+        products = product_count_or_none(kw)
+        ratio = round(products / total, 2) if total and products is not None else None
         rows.append({"키워드": kw, "PC검색": pc, "모바일검색": mobile, "총검색": total,
-                     "상품수": products, "경쟁강도": ratio})
+                     "광고경쟁정도": comp, "상품수": products, "경쟁강도": ratio})
         time.sleep(0.1)
 
-    rows.sort(key=lambda r: (r["경쟁강도"] is None, r["경쟁강도"] or 0))
+    if all(r["상품수"] is None for r in rows):
+        print("쇼핑 검색 API 없이 진행: 상품수·경쟁강도는 비워 두고 검색량 순으로 정렬합니다.\n")
+        rows.sort(key=lambda r: -r["총검색"])
+    else:
+        rows.sort(key=lambda r: (r["경쟁강도"] is None, r["경쟁강도"] or 0))
     os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
     with open(OUT_PATH, "w", newline="", encoding="utf-8-sig") as f:
         writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
         writer.writeheader()
         writer.writerows(rows)
 
-    print(f"{'키워드':<16}{'총검색':>8}{'상품수':>10}{'경쟁강도':>10}")
+    print(f"{'키워드':<16}{'총검색':>8}{'광고경쟁':>8}{'상품수':>10}{'경쟁강도':>10}")
     for r in rows:
+        products = "-" if r["상품수"] is None else r["상품수"]
         ratio = "-" if r["경쟁강도"] is None else r["경쟁강도"]
-        print(f"{r['키워드']:<16}{r['총검색']:>8}{r['상품수']:>10}{ratio:>10}")
+        print(f"{r['키워드']:<16}{r['총검색']:>8}{r['광고경쟁정도']:>8}{products:>10}{ratio:>10}")
     print(f"\n저장: {os.path.abspath(OUT_PATH)}")
 
 
