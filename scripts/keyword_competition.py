@@ -36,8 +36,8 @@ KEYWORDS = [
 OUT_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "keyword_competition.csv")
 
 
-def env(name):
-    value = os.environ.get(name)
+def env(name, *aliases):
+    value = next((os.environ[n] for n in (name, *aliases) if os.environ.get(n)), None)
     if not value:
         sys.exit(f"환경변수 {name} 가 설정되지 않았습니다.")
     return value
@@ -58,8 +58,8 @@ def parse_count(value):
 
 def fetch_search_volumes(keywords):
     """네이버 검색광고 키워드도구. 한 번에 힌트 키워드 5개까지, 공백 없이 보내야 한다."""
-    api_key = env("NAVER_AD_API_KEY")
-    secret = env("NAVER_AD_SECRET_KEY")
+    api_key = env("NAVER_AD_API_KEY", "NAVER_AD_APIKEY")
+    secret = env("NAVER_AD_SECRET_KEY", "NAVER_AD_SECRT_KEY")
     customer = env("NAVER_AD_CUSTOMER_ID")
     path = "/keywordstool"
     volumes = {}
